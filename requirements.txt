@@ -10,4 +10,5 @@ pymongo
 scipy
 spacy
 streamlit
+gensim
 -e .
