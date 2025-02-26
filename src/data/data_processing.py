@@ -1,11 +1,13 @@
 import logging
 import spacy
 import pandas as pd
+import numpy as np
 from pathlib import Path
 from src.logger import logging
+from gensim.models import Word2Vec
 from src.data import install_dependancy
 from sklearn.feature_extraction.text import TfidfVectorizer
-
+from src.model.model import save_model
 def load_raw_data(input_path: Path) -> pd.DataFrame:
     """Load the raw data from the CSV file."""
     logging.info(f"Loading raw data from {input_path}...")
@@ -33,42 +35,58 @@ def preprocess_text_spacy(text):
     tokens = [token.lemma_ for token in doc if not token.is_stop and token.is_alpha]  # Lemmatization & stopword removal
     return " ".join(tokens)
 
-def vectorization(df: pd.DataFrame) -> pd.DataFrame:
-    """Perform TF-IDF vectorization on the 'clean_title' column."""
-    logging.info("TF-IDF vectorization started ...")
-    # Convert text to numerical features using TF-IDF
-    vectorizer = TfidfVectorizer(max_features=100)  # Extract top 100 important words
-    X_tfidf = vectorizer.fit_transform(df["clean_title"]).toarray()
-    
-    # Convert to DataFrame
-    tfidf_df = pd.DataFrame(X_tfidf, columns=vectorizer.get_feature_names_out())
-    
-    # Merge TF-IDF features with original dataset
-    df = pd.concat([df, tfidf_df], axis=1)
+def train_word2vec_model(sentences):
+    """Train a Word2Vec model on the sentences."""
+    logging.info("Training Word2Vec model...")
+    model = Word2Vec(sentences, vector_size=100, window=5, min_count=1, workers=4)
+    model.save(str(Path(__file__).parent.parent.parent/'models'/'word2vec.model'))  # Save the model for future use
+    return model
+
+
+def vectorize_text_using_word2vec(df: pd.DataFrame, model: Word2Vec) -> pd.DataFrame:
+    """Vectorize text data using Word2Vec embeddings."""
+    logging.info("Vectorizing text using Word2Vec...")
+
+    def get_average_word_vector(tokens):
+        """Convert a list of tokens into an average word vector."""
+        word_vectors = [model.wv[token] for token in tokens if token in model.wv]
+        if len(word_vectors) == 0:
+            return [0] * model.vector_size  # Return a zero vector if no valid word vectors
+        return np.mean(word_vectors, axis=0)  # Return the average vector
+
+    # Apply Word2Vec to the 'clean_title' column
+    wordvecs = df["clean_title"].apply(get_average_word_vector)
+    wordvecs_df = pd.DataFrame(wordvecs.tolist(), columns=[f"wordvec_{i}" for i in range(model.vector_size)])
+
+    # Merge Word2Vec features with original dataset
+    df = pd.concat([df, wordvecs_df], axis=1)
 
     # Drop raw text columns (optional)
     df.drop(["title", "clean_title"], axis=1, inplace=True)
 
-    logging.info("TF-IDF vectorization completed successfully.")
-    # Display the new dataset with TF-IDF features
-    logging.info(f"TF-IDF DataFrame: \n{df.head()}")
+    logging.info(f"Word2Vec vectorization completed. Dataframe shape: {df.shape}")
     return df
-def processing(df:pd.DataFrame)->pd.DataFrame:
-    # Apply preprocessing to the "title" column
+
+def processing(df: pd.DataFrame) -> pd.DataFrame:
+    """Process data by preprocessing and vectorizing using Word2Vec."""
     logging.info("Step 2: Preprocessing the 'title' column")
     df["clean_title"] = df["title"].apply(preprocess_text_spacy)
 
     # Display the first few cleaned titles
     logging.info(f"Cleaned titles:\n{df[['title', 'clean_title']].head()}")
 
-    # Perform vectorization
+    # Train Word2Vec model on the entire 'clean_title' column
+    sentences = df["clean_title"].tolist()
+    model = train_word2vec_model(sentences)
+
+    # Vectorize the data
     logging.info("Step 3: Starting vectorization process")
-    df = vectorization(df)
-    
+    df = vectorize_text_using_word2vec(df, model)
+
     # Handle missing data
     logging.info("Removing missing data...")
     df = df.dropna()
-    
+
     return df
     
 def save_data(data: pd.DataFrame, output_path: Path):
@@ -94,7 +112,8 @@ def main():
     df = load_raw_data(raw_data_path / input_file_name)
     
     df = processing(df)
-
+    save_data(df,root_path/'data'/'processed')
+    
     logging.info("Data processing pipeline completed successfully.")
 
 if __name__ == '__main__':
