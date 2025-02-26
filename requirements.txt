@@ -11,4 +11,5 @@ scipy
 spacy
 streamlit
 gensim
+plotly
 -e .

@@ -1,10 +1,11 @@
 from fastapi import APIRouter, HTTPException
-from src.backend.schemas import ExpenseCreate
+from src.backend.schemas import *
 from src.backend.database import expenses_collection, budgets_collection
 from datetime import datetime
 from src.backend.ml_model import predict_category
 import pandas as pd
 from datetime import datetime, timedelta
+from src.backend.budget_advisor import *
 
 router = APIRouter()
 
@@ -15,9 +16,12 @@ async def add_expense(expense: ExpenseCreate):
         # Predict category
         predicted_category = predict_category(expense.title, expense.amount, expense.account, expense.type)
 
+         # Step 2: Validate category using Gemini API
+        final_category = validate_category_with_gemini(expense.title, expense.amount, expense.account, expense.type, predicted_category)
+
         # Convert to dictionary & add category and date
         expense_dict = expense.dict()
-        expense_dict["category"] = predicted_category
+        expense_dict["category"] = final_category
         expense_dict["date"] = datetime.now().isoformat()
 
         # Insert into DB
@@ -28,6 +32,17 @@ async def add_expense(expense: ExpenseCreate):
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error adding expense: {str(e)}")
 
+# Get all Transaction
+@router.get("/expenses/")
+async def get_all_expenses():
+    try:
+        expenses = list(expenses_collection.find().sort("date", -1))  # Sorted by latest
+        for exp in expenses:
+            exp["_id"] = str(exp["_id"])
+        return expenses
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error fetching all expenses: {str(e)}")
+    
 # 📌 Get Last Transaction
 @router.get("/expenses/last")
 async def get_last_expense():
@@ -61,52 +76,64 @@ async def get_today_expenses():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching today's expenses: {str(e)}")
 
-# 📌 Get Monthly Expense Summary
+# 📌 Get Monthly Expense Summary & Trend
 @router.get("/expenses/monthly")
 async def get_monthly_expenses():
     try:
         month_start = datetime(datetime.now().year, datetime.now().month, 1)
         next_month = datetime(datetime.now().year, datetime.now().month + 1, 1)
 
-        # Fetch all transactions in the month
         transactions = list(expenses_collection.find({"date": {"$gte": month_start.isoformat(), "$lt": next_month.isoformat()}}))
         df = pd.DataFrame(transactions)
 
-        # Separate income and expenses
         if not df.empty:
             expenses_total = df[df["type"] == "Expense"]["amount"].sum()
             income_total = df[df["type"] == "Income"]["amount"].sum()
+            expense_trend = df.groupby("date")["amount"].sum().reset_index().to_dict(orient="records")
         else:
             expenses_total = 0
             income_total = 0
+            expense_trend = []
 
-        monthly_balance = income_total - expenses_total  # Net balance
+        monthly_balance = income_total - expenses_total
 
         return {
             "monthly_income": income_total,
             "monthly_expense": expenses_total,
-            "monthly_balance": monthly_balance
+            "monthly_balance": monthly_balance,
+            "trend": expense_trend
         }
-
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Error fetching monthly expenses: {str(e)}")
-
-# 📌 Set Monthly Budget
-@router.post("/budget/")
-async def set_budget(amount: float):
-    try:
-        budgets_collection.update_one({}, {"$set": {"monthly_budget": amount}}, upsert=True)
-        return {"message": "Budget updated successfully", "budget": amount}
-
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error setting budget: {str(e)}")
-
+    
+    
 # 📌 Get Monthly Budget
 @router.get("/budget/")
-async def get_budget():
-    try:
-        budget = budgets_collection.find_one()
-        return {"monthly_budget": budget["monthly_budget"]} if budget else {"monthly_budget": 0}
+def get_budget():
+    """Fetches the current monthly budget."""
+    budget_data = budgets_collection.find_one({}, {"_id": 0, "monthly_budget": 1})
+    if not budget_data:
+        return {"monthly_budget": 0}
+    return budget_data
 
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Error fetching budget: {str(e)}")
+
+# 📌 Update Monthly Budget
+@router.post("/budget/")
+def update_budget(data: BudgetUpdate):
+    """Updates the monthly budget."""
+    budgets_collection.update_one({}, {"$set": {"monthly_budget": data.amount}}, upsert=True)
+    return {"message": "✅ Budget updated successfully!"}
+
+
+#  📌 Get Monthly Expense Analysis
+@router.get("/budget/analyze")
+def get_budget_analysis():
+    """Fetches and analyzes the budget vs. spending."""
+    return analyze_budget()
+
+
+# 📌 Get AI-Generated Budget Advice
+@router.get("/budget/advice")
+def get_budget_advice():
+    """Generates AI-powered budget recommendations."""
+    return {"advice": generate_budget_advice()}
