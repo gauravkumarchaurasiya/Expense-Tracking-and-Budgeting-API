@@ -3,4 +3,11 @@ uvicorn
 scikit-learn
 pandas
 spacy
+dotenv
+joblib
+numpy
+pymongo
+scipy
+spacy
+streamlit
 -e .
