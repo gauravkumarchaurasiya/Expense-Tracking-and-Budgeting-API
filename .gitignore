@@ -1,0 +1,7 @@
+venv
+__pycache__
+# Data
+src.egg-info
+logs
+/data/
+models
