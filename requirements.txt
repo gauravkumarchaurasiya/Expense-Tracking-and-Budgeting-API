@@ -12,4 +12,5 @@ spacy
 streamlit
 gensim
 plotly
+google-generativeai
 -e .

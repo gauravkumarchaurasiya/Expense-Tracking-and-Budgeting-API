@@ -19,7 +19,12 @@ def load_dataframe(path: Path) -> pd.DataFrame:
 
 def make_X_y(dataframe: pd.DataFrame, target_column: str):
     """Split a DataFrame into feature matrix X and target vector y."""
-    X = dataframe.drop(columns=target_column)
+    dataframe.dropna()
+    X = dataframe.drop(columns=[target_column,'_id','date'])
+    X['account_encoded'] = X['account'].replace({'Cash': 1, 'Bank': 0})
+    X['type_encoded'] = X['type'].replace({'Expense': 1, 'Income': 0})
+    X.drop(columns=['account','type'],inplace=True)
+    print(X)
     y = dataframe[target_column]
     y = pd.get_dummies(y, drop_first=False)
     y = y.astype(int)

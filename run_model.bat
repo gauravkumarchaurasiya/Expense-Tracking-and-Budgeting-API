@@ -1,6 +1,9 @@
 @echo off
 echo Activating Virtual Environment...
-call venv\Scripts\activate
+call venv1\Scripts\activate
+
+echo Running Data Backup...
+python src\data\data_backup.py
 
 echo Running Data Procesing...
 python src\data\data_processing.py
@@ -8,13 +11,13 @@ python src\data\data_processing.py
 echo Running Model Training...
 python src\model\model.py
 
-echo Running Model Prediction...
-python src\model\predict.py
+@REM echo Running Model Prediction...
+@REM python src\model\predict.py
 
 echo Starting FastAPI Server...
-start cmd /k "python src\backend\main.py"
+start cmd /k "uvicorn src.backend.main:app --host 0.0.0.0 --port $port"
 
-echo Launching Streamlit App...
-start cmd /k "streamlit run src\frontend\app.py"
+@REM echo Launching Streamlit App...
+@REM start cmd /k "streamlit run src\frontend\app.py"
 
 echo All services started successfully!

@@ -110,7 +110,7 @@ def main():
     
     # Load raw data
     df = load_raw_data(raw_data_path / input_file_name)
-    
+    install_spacy_dependancy()
     df = processing(df)
     save_data(df,root_path/'data'/'processed')
     
