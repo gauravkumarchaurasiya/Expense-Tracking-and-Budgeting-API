@@ -39,12 +39,3 @@ echo "Launching Streamlit App on port $STREAMLIT_PORT..."
 # Running Streamlit App
 streamlit run src/frontend/app.py --server.port $STREAMLIT_PORT &
 
-# Check if Streamlit started properly
-if [ $? -eq 0 ]; then
-    echo "Streamlit App launched successfully."
-else
-    echo "Failed to launch Streamlit App."
-    exit 1
-fi
-
-echo "All services started successfully!"
