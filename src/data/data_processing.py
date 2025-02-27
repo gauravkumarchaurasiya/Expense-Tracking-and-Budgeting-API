@@ -1,5 +1,6 @@
 import logging
 import spacy
+import os
 import pandas as pd
 import numpy as np
 from pathlib import Path
@@ -39,6 +40,8 @@ def train_word2vec_model(sentences):
     """Train a Word2Vec model on the sentences."""
     logging.info("Training Word2Vec model...")
     model = Word2Vec(sentences, vector_size=100, window=5, min_count=1, workers=4)
+    temp = Path(__file__).parent.parent.parent/'models'
+    temp.mkdir(parents=True, exist_ok=True)
     model.save(str(Path(__file__).parent.parent.parent/'models'/'word2vec.model'))  # Save the model for future use
     return model
 
@@ -112,6 +115,7 @@ def main():
     df = load_raw_data(raw_data_path / input_file_name)
     install_spacy_dependancy()
     df = processing(df)
+    print(df)
     save_data(df,root_path/'data'/'processed')
     
     logging.info("Data processing pipeline completed successfully.")
