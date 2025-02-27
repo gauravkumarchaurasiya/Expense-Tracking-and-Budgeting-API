@@ -41,4 +41,4 @@ streamlit_port = 8501
 print(f"Launching Streamlit App on port {streamlit_port}...")
 
 # Run Streamlit app
-run_command(f"streamlit run src/frontend/app.py --server.port {streamlit_port}")
+run_command(f"streamlit run src/frontend/app.py --server.address 0.0.0.0 --server.port {streamlit_port}")
